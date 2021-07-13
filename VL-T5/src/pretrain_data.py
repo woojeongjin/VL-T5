@@ -20,8 +20,9 @@ from tokenization import VLT5Tokenizer, VLT5TokenizerFast
 import preprocess
 from qa_answer_table import AnswerTable
 
-project_dir = Path(__file__).resolve().parent.parent # VLT5
-workspace_dir = project_dir.parent
+# project_dir = Path(__file__).resolve().parent.parent # VLT5
+# workspace_dir = project_dir.parent
+workspace_dir = Path('/mnt/root/vlt5')
 dataset_dir = workspace_dir.joinpath('datasets/').resolve()
 coco_dir = dataset_dir.joinpath('COCO')
 vg_dir = dataset_dir.joinpath('VG')
@@ -108,6 +109,12 @@ def get_datum(datum):
             if datum['lm'] and labels is None:
                 new_datum = deepcopy(new_datum)
                 new_datum['task'] = 'lm'
+                new_datum['label'] = None
+                data.append(new_datum)
+
+            if datum['prefix'] and labels is None:
+                new_datum = deepcopy(new_datum)
+                new_datum['task'] = 'prefix'
                 new_datum['label'] = None
                 data.append(new_datum)
 
@@ -210,6 +217,7 @@ class PretrainDataset(Dataset):
 
                     datum['lm'] = 'lm' in losses
                     datum['qa'] = 'qa' in losses
+                    datum['prefix'] = 'prefix' in losses
                     datum['ground_caption'] = 'ground_caption' in losses
                     datum['refer'] = 'refer' in losses
                     datum['itm'] = 'itm' in losses
@@ -359,6 +367,18 @@ class PretrainDataset(Dataset):
                         obj = vg_classes[obj_id]
                         if obj not in input_tokens:
                             input_tokens.append(obj)
+                source_text = ' '.join(input_tokens)
+            
+            elif task == 'prefix':
+                assert text_source in ["mscoco", 'vg']
+
+                prefix = ""
+                sent = datum['sent']
+                source_text, target_text = preprocess.corrupt_prefix(
+                    sent, mask_ratio=0.5, prefix=prefix)
+
+                input_tokens = [source_text]
+
                 source_text = ' '.join(input_tokens)
 
             elif task == 'qa':

@@ -3,6 +3,15 @@ import numpy as np
 import random
 from copy import deepcopy
 
+def corrupt_prefix(input_text, mask_ratio=0.5, prefix=""):
+    tokens = input_text.split()
+
+    n_tokens = len(tokens)
+    split = random.randint(1, n_tokens-1)
+    source_text = " ".join(tokens[:split])
+    target_text = " ".join(tokens[split:])
+
+    return source_text, target_text
 
 def corrupt_spans(text, mask_ratio=0.15, prefix=None):
     """T5-style Masked Language Modeling with corrupted span prediction
@@ -78,6 +87,16 @@ def corrupt_spans(text, mask_ratio=0.15, prefix=None):
         source_text = f"{prefix} {masked_text}"
 
     target_text = " ".join(target_tokens)
+
+    return source_text, target_text
+
+def corrupt_prefix(input_text, mask_ratio=0.5, prefix=""):
+    tokens = input_text.split()
+
+    n_tokens = len(tokens)
+    split = random.randint(1, n_tokens-1)
+    source_text = " ".join(tokens[:split])
+    target_text = " ".join(tokens[split:])
 
     return source_text, target_text
 

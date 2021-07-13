@@ -6,7 +6,9 @@ import torch
 
 from pathlib import Path
 
-datasets_dir = Path(__file__).resolve().parent.parent.parent.joinpath('datasets')
+# datasets_dir = Path(__file__).resolve().parent.parent.parent.joinpath('datasets')
+workspace_dir = Path('/mnt/root/vlt5')
+datasets_dir = workspace_dir.joinpath('datasets/').resolve()
 
 class AnswerTable:
     ANS_CONVERT = {
