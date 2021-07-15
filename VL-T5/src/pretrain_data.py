@@ -12,6 +12,9 @@ import torch
 import numpy as np
 from torch.utils.data.distributed import DistributedSampler
 from copy import deepcopy
+import spacy
+import re
+from spacy.tokenizer import Tokenizer
 
 
 from transformers import T5Tokenizer, BartTokenizer, T5TokenizerFast, BartTokenizerFast
@@ -112,9 +115,27 @@ def get_datum(datum):
                 new_datum['label'] = None
                 data.append(new_datum)
 
+            if datum['lmnoun'] and labels is None:
+                new_datum = deepcopy(new_datum)
+                new_datum['task'] = 'lmnoun'
+                new_datum['label'] = None
+                data.append(new_datum)
+
             if datum['prefix'] and labels is None:
                 new_datum = deepcopy(new_datum)
                 new_datum['task'] = 'prefix'
+                new_datum['label'] = None
+                data.append(new_datum)
+            
+            if datum['ar'] and labels is None:
+                new_datum = deepcopy(new_datum)
+                new_datum['task'] = 'ar'
+                new_datum['label'] = None
+                data.append(new_datum)
+            
+            if datum['captioning'] and labels is None:
+                new_datum = deepcopy(new_datum)
+                new_datum['task'] = 'captioning'
                 new_datum['label'] = None
                 data.append(new_datum)
 
@@ -185,6 +206,9 @@ class PretrainDataset(Dataset):
         self.verbose = verbose
         self.args = args
 
+        self.nlp = spacy.load('en_core_web_sm')
+        self.nlp.pipeline = [("tagger", self.nlp.tagger), ("parser", self.nlp.parser)]
+        self.nlp.tokenizer = Tokenizer(self.nlp.vocab, token_match=re.compile(r'\S+').match)
 
         # Loading datasets to data
         self.sources = split.split(',')
@@ -216,8 +240,13 @@ class PretrainDataset(Dataset):
                     datum['caption_only'] = args.caption_only
 
                     datum['lm'] = 'lm' in losses
+                    datum['lmnoun'] = 'lmnoun' in losses
                     datum['qa'] = 'qa' in losses
                     datum['prefix'] = 'prefix' in losses
+                    datum['ar'] = 'ar' in losses
+                    datum['captioning'] = 'captioning' in losses
+
+
                     datum['ground_caption'] = 'ground_caption' in losses
                     datum['refer'] = 'refer' in losses
                     datum['itm'] = 'itm' in losses
@@ -355,9 +384,29 @@ class PretrainDataset(Dataset):
                 assert text_source in ["mscoco", 'vg']
 
                 prefix = "span prediction:"
+                # prefix = ""
                 sent = datum['sent']
                 source_text, target_text = preprocess.corrupt_spans(
                     sent, mask_ratio=self.args.word_mask_rate, prefix=prefix)
+
+                input_tokens = [source_text]
+                if self.args.oscar_tags:
+                    input_tokens.append('tags:')
+                    obj_ids = f[f'{img_id}/obj_id'][()]
+                    for obj_id in obj_ids:
+                        obj = vg_classes[obj_id]
+                        if obj not in input_tokens:
+                            input_tokens.append(obj)
+                source_text = ' '.join(input_tokens)
+            
+            if task == 'lmnoun':
+                assert text_source in ["mscoco", 'vg']
+
+                prefix = "span prediction:"
+                # prefix = ""
+                sent = datum['sent']
+                source_text, target_text = preprocess.corrupt_spans_noun(
+                    sent, self.nlp, mask_ratio=self.args.word_mask_rate, prefix=prefix)
 
                 input_tokens = [source_text]
                 if self.args.oscar_tags:
@@ -375,6 +424,30 @@ class PretrainDataset(Dataset):
                 prefix = ""
                 sent = datum['sent']
                 source_text, target_text = preprocess.corrupt_prefix(
+                    sent, mask_ratio=0.5, prefix=prefix)
+
+                input_tokens = [source_text]
+
+                source_text = ' '.join(input_tokens)
+
+            elif task == 'ar':
+                assert text_source in ["mscoco", 'vg']
+
+                prefix = ""
+                sent = datum['sent']
+                source_text, target_text = preprocess.corrupt_ar(
+                    sent, mask_ratio=0.5, prefix=prefix)
+
+                input_tokens = [source_text]
+
+                source_text = ' '.join(input_tokens)
+            
+            elif task == 'captioning':
+                assert text_source in ["mscoco", 'vg']
+
+                prefix = ""
+                sent = datum['sent']
+                source_text, target_text = preprocess.corrupt_caption(
                     sent, mask_ratio=0.5, prefix=prefix)
 
                 input_tokens = [source_text]
@@ -438,6 +511,7 @@ class PretrainDataset(Dataset):
                     sent = other_datum['sent']
 
                 prefix = "image text match:"
+                # prefix = ""
                 # source_text = f"{prefix} {sent}"
                 input_tokens = [prefix]
                 if self.args.oscar_tags:
@@ -466,6 +540,7 @@ class PretrainDataset(Dataset):
 
                 # prefix = "describe visual inputs:"
                 prefix = "caption region:"
+                # prefix = ""
                 source_text, target_text = preprocess.ground_caption(
                     captions, self.args.n_ground, prefix=prefix, sort=False)
 
@@ -487,6 +562,7 @@ class PretrainDataset(Dataset):
 
                 # prefix = "refer expressions:"
                 prefix = "visual grounding:"
+                # prefix = ""
                 source_text, target_text = preprocess.refer_expression(
                     captions, self.args.n_ground, prefix=prefix, sort=False)
 

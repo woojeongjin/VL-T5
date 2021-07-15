@@ -2,7 +2,7 @@
 name=VLT5
 
 
-output=/mnt/root/vlt5/pretrain/prefix/$name
+output=/mnt/root/vlt5/pretrain/prefix_only/$name
 
 export WANDB_API_KEY=9fe5e176e6d0edecf332cdf97a58020645efb6d4
 
@@ -19,8 +19,8 @@ python -m torch.distributed.launch \
         --lr 1e-4 \
         --num_workers 1 \
         --clip_grad_norm 1.0 \
-        --losses 'lm,prefix,ground_caption,refer,itm' \
+        --losses 'prefix,ground_caption,refer,itm' \
         --backbone 't5-base' \
-        ${@:2} \
+        --output $output ${@:2} \
         --epoch 30 \
         --caption_only \

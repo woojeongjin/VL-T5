@@ -3,15 +3,6 @@ import numpy as np
 import random
 from copy import deepcopy
 
-def corrupt_prefix(input_text, mask_ratio=0.5, prefix=""):
-    tokens = input_text.split()
-
-    n_tokens = len(tokens)
-    split = random.randint(1, n_tokens-1)
-    source_text = " ".join(tokens[:split])
-    target_text = " ".join(tokens[split:])
-
-    return source_text, target_text
 
 def corrupt_spans(text, mask_ratio=0.15, prefix=None):
     """T5-style Masked Language Modeling with corrupted span prediction
@@ -90,6 +81,88 @@ def corrupt_spans(text, mask_ratio=0.15, prefix=None):
 
     return source_text, target_text
 
+def corrupt_spans_noun(text, nlp, mask_ratio=0.15, prefix=None):
+
+    tokens = text.split()
+    doc = nlp(text)
+    N_concepts = []
+    N_ind = []
+    for tok in doc:
+        # root_noun = noun_chunk[-1]
+        if tok.pos_ in ["NOUN", "PROPN", "ADV", "ADJ", "NUM"]:
+            N_concepts.append(tok.text)
+    # assert len(tokens) == len(doc)
+    if len(N_concepts) != 0:
+        
+        n_nouns = len(N_concepts)
+        for i,token in enumerate(tokens):
+            if token in N_concepts:
+                N_ind.append(i)
+
+        n_mask = int(max(mask_ratio * n_nouns, 1))
+        mask_indices_pre = torch.randperm(n_nouns)[:n_mask].sort().values
+
+        assert len(mask_indices_pre) > 0, text
+
+        mask_indices_pre = mask_indices_pre.tolist()
+        mask_indices = []
+        for ind in mask_indices_pre:
+            mask_indices.append(N_ind[ind])
+    else:
+        n_tokens = len(tokens)
+
+        n_mask = int(max(mask_ratio * n_tokens, 1))
+        mask_indices = torch.randperm(n_tokens)[:n_mask].sort().values
+    
+    span = [mask_indices[0], mask_indices[0]+1]
+    spans = []
+
+    for i, mask_index in enumerate(mask_indices):
+        # if current mask is not the last one & the next mask is right after current mask
+        if i < len(mask_indices) - 1 and mask_indices[i+1] == mask_index + 1:
+            contiguous = True
+        else:
+            contiguous = False
+
+        if contiguous:
+            span[1] += 1
+
+        else:
+            # non contiguous -> output current span
+            spans.append(span)
+            # if current mask is not the last one -> create next span
+            if i < len(mask_indices) - 1:
+                span = [mask_indices[i+1], mask_indices[i+1]+1]
+
+    masked_tokens = deepcopy(tokens)
+
+    target_tokens = []
+    cum_span_length = 0
+    for i, span in enumerate(spans):
+        start, end = span
+
+        masked_tokens[start-cum_span_length+i: end -
+                      cum_span_length+i] = [f'<extra_id_{i}>']
+
+        target_tokens.append(f'<extra_id_{i}>')
+        target_tokens.extend(tokens[start:end])
+
+        cum_span_length += (end - start)
+
+    # target_tokens.append(f'<extra_id_{i+1}>')
+    # target_tokens.append(f'</s>')
+
+    masked_text = " ".join(masked_tokens)
+
+    if prefix is None:
+        source_text = masked_text
+    else:
+        source_text = f"{prefix} {masked_text}"
+
+    target_text = " ".join(target_tokens)
+
+    return source_text, target_text
+
 def corrupt_prefix(input_text, mask_ratio=0.5, prefix=""):
     tokens = input_text.split()
 
@@ -99,6 +172,26 @@ def corrupt_prefix(input_text, mask_ratio=0.5, prefix=""):
     target_text = " ".join(tokens[split:])
 
     return source_text, target_text
+
+def corrupt_ar(input_text, mask_ratio=0.5, prefix=""):
+    tokens = input_text.split()
+
+    n_tokens = len(tokens)
+    split = random.randint(1, n_tokens-1)
+    source_text = " ".join(tokens[:split])
+    target_text = " ".join(tokens[split])
+
+    return source_text, target_text
+
+def corrupt_caption(input_text, mask_ratio=0.5, prefix=""):
+    # tokens = input_text.split()
+
+    # n_tokens = len(tokens)
+    # split = random.randint(1, n_tokens-1)
+    # source_text = " ".join(tokens[:split])
+    # target_text = " ".join(tokens[split])
+
+    return "", input_text
 
 
 def corrupt_bart(input_text, mask_ratio=0.30, prefix="denoise text:"):

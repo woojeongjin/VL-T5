@@ -22,6 +22,7 @@ environment:
     # - pip install --upgrade pip
     - pip install git+https://github.com/j-min/language-evaluation.git
     - pip install -r requirements.txt
+    - python -m spacy download en_core_web_sm
 
 code:
   # local directory of the code. this will be uploaded to the server.
@@ -33,12 +34,37 @@ code:
 #   data upload is not required for this example
 
 # list of jobs to run, we run 2 jobs in this example
+
+# sku:
+#     - Field SKU ('G9') should be one of ['G0', 'G1', 'G2', 'G4', 'G8', 'G16', '16G1',
+#       '16G4', '16G8', '24G1', '24G2', '24G4', '24G8', '32G4', '32G8', '32G16', '64G4',
+#       '40G8']
+
 jobs:
 - name: prefix
   sku: G4
   command:
   - bash scripts/pretrain_VLT5_prefix.sh 4
-# - name: low_lr2
-#   sku: G1
-#   command:
-#   - python main.py --lr 0.1
+
+- name: prefix_only
+  sku: G8
+  command:
+  - bash scripts/pretrain_VLT5_prefixonly.sh 8
+
+- name: ar
+  sku: G8
+  command:
+  - bash scripts/pretrain_VLT5_ar.sh 8
+
+
+- name: prefix_no_desc
+  sku: G8
+  command:
+  - bash scripts/pretrain_VLT5_prefix.sh 8 --output /mnt/root/vlt5/pretrain/prefix_no_desc
+
+- name: lm_noun
+  sku: G8
+  command:
+  - bash scripts/pretrain_VLT5_lmnoun.sh 8 --output /mnt/root/vlt5/pretrain/lmnoun
+
+
