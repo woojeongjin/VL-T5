@@ -569,9 +569,11 @@ class PretrainDataset(Dataset):
                 sent = source_text
 
                 loss_weight = self.args.ground_weight
-
-            input_ids = self.tokenizer.encode(
-                source_text, padding=True, truncation=True, max_length=self.args.max_text_length)
+            if task == 'captioning' and self.args.caption_no_eos:
+                input_ids = []
+            else:
+                input_ids = self.tokenizer.encode(
+                    source_text, padding=True, truncation=True, max_length=self.args.max_text_length)
             target_ids = self.tokenizer.encode(
                 target_text, padding=True, truncation=True, max_length=self.args.gen_max_length)
 

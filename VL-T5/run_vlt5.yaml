@@ -20,6 +20,8 @@ environment:
     # - sudo pip install -U pip setuptools
     # - sudo apt-get install git
     # - pip install --upgrade pip
+    - sudo apt-get update -y
+    - sudo apt-get install -y libopenmpi-dev
     - pip install git+https://github.com/j-min/language-evaluation.git
     - pip install -r requirements.txt
     - python -m spacy download en_core_web_sm
@@ -67,4 +69,26 @@ jobs:
   command:
   - bash scripts/pretrain_VLT5_lmnoun.sh 8 --output /mnt/root/vlt5/pretrain/lmnoun
 
+- name: captioning
+  sku : G8
+  command:
+  - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/captioning --losses 'lm,captioning,ground_caption,refer,itm' 
 
+- name: captioning_noeos
+  sku : G8
+  command:
+  - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/captioning_noeos --losses 'lm,captioning,ground_caption,refer,itm' --caption_no_eos
+
+- name: caption_only_noeos
+  sku : G8
+  command:
+  - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/caption_only_noeostest --losses 'captioning,ground_caption,refer,itm' --caption_no_eos
+
+- name: caption_sku_count
+  sku : G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/caption_only_noeostest2 --losses 'captioning,ground_caption,refer,itm' --caption_no_eos

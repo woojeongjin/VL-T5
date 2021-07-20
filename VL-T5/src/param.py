@@ -139,6 +139,7 @@ def parse_args(parse=True, **optional_kwargs):
     parser.add_argument('--ground_weight', type=int, default=1)
     parser.add_argument('--itm_cocoonly', default=True, type=str2bool)
     parser.add_argument('--single_vqa_prefix', action='store_true')
+    parser.add_argument('--caption_no_eos', action='store_true')
 
     # COCO Caption
     parser.add_argument('--no_prefix', action='store_true')
