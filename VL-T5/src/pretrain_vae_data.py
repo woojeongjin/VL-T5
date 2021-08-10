@@ -17,11 +17,17 @@ import re
 from spacy.tokenizer import Tokenizer
 
 
+import torchvision.transforms as transforms
+from torchvision.datasets.folder import default_loader
+from dalle_pytorch import OpenAIDiscreteVAE
+
 from transformers import T5Tokenizer, BartTokenizer, T5TokenizerFast, BartTokenizerFast
 from tokenization import VLT5Tokenizer, VLT5TokenizerFast
 
 import preprocess
 from qa_answer_table import AnswerTable
+
+from dalle_utils import map_pixels
 
 # project_dir = Path(__file__).resolve().parent.parent # VLT5
 # workspace_dir = project_dir.parent
@@ -214,11 +220,30 @@ class PretrainDataset(Dataset):
         self.verbose = verbose
         self.args = args
 
+        
+        # self.vae = OpenAIDiscreteVAE()
+
         self.nlp = spacy.load('en_core_web_sm')
         self.nlp.pipeline = [("tagger", self.nlp.tagger), ("parser", self.nlp.parser)]
         self.nlp.tokenizer = Tokenizer(self.nlp.vocab, token_match=re.compile(r'\S+').match)
 
         self.pointer_h5 = None
+
+        if is_train:
+            self.img_transform = transforms.Compose([
+                transforms.Resize(112, interpolation=1),
+                transforms.CenterCrop(112),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                map_pixels
+            ])
+        else:
+            self.img_transform = transforms.Compose([
+                transforms.Resize(112, interpolation=1),
+                transforms.CenterCrop(112),
+                transforms.ToTensor(),
+                map_pixels
+            ])
 
         # Loading datasets to data
         self.sources = split.split(',')
@@ -334,13 +359,16 @@ class PretrainDataset(Dataset):
         if self.verbose:
             print("# examples:", len(data))
 
-        self.source_to_h5 = {
-            'mscoco_resplit_train_train2014': coco_dir.joinpath('features').joinpath('train2014_obj36.h5'),
-            'mscoco_resplit_train_val2014': coco_dir.joinpath('features').joinpath('val2014_obj36.h5'),
-            'mscoco_resplit_val': coco_dir.joinpath('features').joinpath('resplit_val_obj36.h5'),
-            'vgnococo': vg_dir.joinpath('features').joinpath('vg_gqa_obj36.h5'),
-            'cc_train': cc_dir.joinpath('features').joinpath('train_obj36.h5'),
-            'cc_valid': cc_dir.joinpath('features').joinpath('valid_obj36.h5'),
+
+        
+
+        self.source_to_img = {
+            'mscoco_resplit_train_train2014': coco_dir.joinpath('Image').joinpath('train2014'),
+            'mscoco_resplit_train_val2014': coco_dir.joinpath('Image').joinpath('val2014'),
+            'mscoco_resplit_val': coco_dir.joinpath('Image').joinpath('val2014'),
+            'vgnococo': vg_dir.joinpath('VG_100K'),
+            # 'cc_train': cc_dir.joinpath('features').joinpath('train_obj36.h5'),
+            # 'cc_valid': cc_dir.joinpath('features').joinpath('valid_obj36.h5'),
 
         }
 
@@ -382,14 +410,27 @@ class PretrainDataset(Dataset):
         ###### Image ######
         img_id = datum['img_id']
         source = datum['img_source']
-        if source == 'cc_train':
-            path = cc_dir.joinpath('features').joinpath(self.pointer_h5[img_id])
-            f = h5py.File(path, 'r')
-        else: 
-            f = self.source_to_h5[source]
-            if isinstance(f, Path):
-                path = self.source_to_h5[source]
-                f = h5py.File(path, 'r')
+
+        img_path = self.source_to_img[source].joinpath(img_id+'.jpg')
+        try:
+            pil_img = default_loader(img_path)
+        except Exception as e:
+            print(e)
+            print(img_path)
+            return self.__getitem__((idx + 95) % self.__len__())
+        tensor_img = self.img_transform(pil_img)
+
+
+
+
+        # if source == 'cc_train':
+        #     path = cc_dir.joinpath('features').joinpath(self.pointer_h5[img_id])
+        #     f = h5py.File(path, 'r')
+        # else: 
+        #     f = self.source_to_h5[source]
+        #     if isinstance(f, Path):
+        #         path = self.source_to_h5[source]
+        #         f = h5py.File(path, 'r')
             # self.source_to_h5[source] = f
 
         if 't5' in self.args.backbone:
@@ -410,13 +451,13 @@ class PretrainDataset(Dataset):
                     sent, mask_ratio=self.args.word_mask_rate, prefix=prefix)
 
                 input_tokens = [source_text]
-                if self.args.oscar_tags:
-                    input_tokens.append('tags:')
-                    obj_ids = f[f'{img_id}/obj_id'][()]
-                    for obj_id in obj_ids:
-                        obj = vg_classes[obj_id]
-                        if obj not in input_tokens:
-                            input_tokens.append(obj)
+                # if self.args.oscar_tags:
+                #     input_tokens.append('tags:')
+                #     obj_ids = f[f'{img_id}/obj_id'][()]
+                #     for obj_id in obj_ids:
+                #         obj = vg_classes[obj_id]
+                #         if obj not in input_tokens:
+                #             input_tokens.append(obj)
                 source_text = ' '.join(input_tokens)
             
             if task == 'lmnoun':
@@ -429,13 +470,13 @@ class PretrainDataset(Dataset):
                     sent, self.nlp, mask_ratio=self.args.word_mask_rate, prefix=prefix)
 
                 input_tokens = [source_text]
-                if self.args.oscar_tags:
-                    input_tokens.append('tags:')
-                    obj_ids = f[f'{img_id}/obj_id'][()]
-                    for obj_id in obj_ids:
-                        obj = vg_classes[obj_id]
-                        if obj not in input_tokens:
-                            input_tokens.append(obj)
+                # if self.args.oscar_tags:
+                #     input_tokens.append('tags:')
+                #     obj_ids = f[f'{img_id}/obj_id'][()]
+                #     for obj_id in obj_ids:
+                #         obj = vg_classes[obj_id]
+                #         if obj not in input_tokens:
+                #             input_tokens.append(obj)
                 source_text = ' '.join(input_tokens)
             
             elif task == 'prefix':
@@ -474,39 +515,39 @@ class PretrainDataset(Dataset):
 
                 source_text = ' '.join(input_tokens)
 
-            elif task == 'qa':
-                assert text_source in ['vqa', 'gqa', 'visual7w'], (text_source, uid)
+            # elif task == 'qa':
+            #     assert text_source in ['vqa', 'gqa', 'visual7w'], (text_source, uid)
 
-                label = datum['label']
-                assert len(label) > 0
+            #     label = datum['label']
+            #     assert len(label) > 0
 
-                keys, values = zip(*label.items())
-                # single answer
-                if len(keys) == 1:
-                    ans = keys[0]
-                # multiple answers -> sample one answer
-                else:
-                    value_sum = sum(values)
-                    prob = [value / value_sum for value in values]
-                    choice = np.random.multinomial(1, prob).argmax()
-                    ans = keys[choice]
+            #     keys, values = zip(*label.items())
+            #     # single answer
+            #     if len(keys) == 1:
+            #         ans = keys[0]
+            #     # multiple answers -> sample one answer
+            #     else:
+            #         value_sum = sum(values)
+            #         prob = [value / value_sum for value in values]
+            #         choice = np.random.multinomial(1, prob).argmax()
+            #         ans = keys[choice]
 
-                sent = datum['sent']
+            #     sent = datum['sent']
 
-                if self.args.single_vqa_prefix:
-                    source_text = f"vqa: {sent}"
-                else:
-                    source_text = f"{text_source}: {sent}"
-                input_tokens = [source_text]
-                if self.args.oscar_tags:
-                    input_tokens.append('tags:')
-                    obj_ids = f[f'{img_id}/obj_id'][()]
-                    for obj_id in obj_ids:
-                        obj = vg_classes[obj_id]
-                        if obj not in input_tokens:
-                            input_tokens.append(obj)
-                source_text = ' '.join(input_tokens)
-                target_text = ans
+            #     if self.args.single_vqa_prefix:
+            #         source_text = f"vqa: {sent}"
+            #     else:
+            #         source_text = f"{text_source}: {sent}"
+            #     input_tokens = [source_text]
+            #     # if self.args.oscar_tags:
+            #     #     input_tokens.append('tags:')
+            #     #     obj_ids = f[f'{img_id}/obj_id'][()]
+            #     #     for obj_id in obj_ids:
+            #     #         obj = vg_classes[obj_id]
+            #     #         if obj not in input_tokens:
+            #     #             input_tokens.append(obj)
+            #     source_text = ' '.join(input_tokens)
+            #     target_text = ans
 
             elif task == 'itm':
 
@@ -534,61 +575,61 @@ class PretrainDataset(Dataset):
                 # prefix = ""
                 # source_text = f"{prefix} {sent}"
                 input_tokens = [prefix]
-                if self.args.oscar_tags:
-                    obj_ids = f[f'{img_id}/obj_id'][()]
-                    for obj_id in obj_ids:
-                        obj = vg_classes[obj_id]
-                        if obj not in input_tokens:
-                            input_tokens.append(obj)
+                # if self.args.oscar_tags:
+                #     obj_ids = f[f'{img_id}/obj_id'][()]
+                #     for obj_id in obj_ids:
+                #         obj = vg_classes[obj_id]
+                #         if obj not in input_tokens:
+                #             input_tokens.append(obj)
                 source_text = ' '.join(input_tokens)
                 if is_matched:
                     target_text = 'true'
                 else:
                     target_text = 'false'
 
-            if task == 'ground_caption':
-                obj_ids = f[f'{img_id}/obj_id'][()]
-                attr_ids = f[f'{img_id}/attr_id'][()]
+            # if task == 'ground_caption':
+            #     obj_ids = f[f'{img_id}/obj_id'][()]
+            #     attr_ids = f[f'{img_id}/attr_id'][()]
 
-                captions = []
-                for obj_id, attr_id in zip(obj_ids, attr_ids):
-                    obj = vg_classes[obj_id]
-                    attr = vg_attrs[attr_id]
+            #     captions = []
+            #     for obj_id, attr_id in zip(obj_ids, attr_ids):
+            #         obj = vg_classes[obj_id]
+            #         attr = vg_attrs[attr_id]
 
-                    caption = f'{attr} {obj}'
-                    captions.append(caption)
+            #         caption = f'{attr} {obj}'
+            #         captions.append(caption)
 
-                # prefix = "describe visual inputs:"
-                prefix = "caption region:"
-                # prefix = ""
-                source_text, target_text = preprocess.ground_caption(
-                    captions, self.args.n_ground, prefix=prefix, sort=False)
+            #     # prefix = "describe visual inputs:"
+            #     prefix = "caption region:"
+            #     # prefix = ""
+            #     source_text, target_text = preprocess.ground_caption(
+            #         captions, self.args.n_ground, prefix=prefix, sort=False)
 
-                sent = source_text
+            #     sent = source_text
 
-                loss_weight = self.args.ground_weight
+            #     loss_weight = self.args.ground_weight
 
-            if task == 'refer':
-                obj_ids = f[f'{img_id}/obj_id'][()]
-                attr_ids = f[f'{img_id}/attr_id'][()]
+            # if task == 'refer':
+            #     obj_ids = f[f'{img_id}/obj_id'][()]
+            #     attr_ids = f[f'{img_id}/attr_id'][()]
 
-                captions = []
-                for obj_id, attr_id in zip(obj_ids, attr_ids):
-                    obj = vg_classes[obj_id]
-                    attr = vg_attrs[attr_id]
+            #     captions = []
+            #     for obj_id, attr_id in zip(obj_ids, attr_ids):
+            #         obj = vg_classes[obj_id]
+            #         attr = vg_attrs[attr_id]
 
-                    caption = f'{attr} {obj}'
-                    captions.append(caption)
+            #         caption = f'{attr} {obj}'
+            #         captions.append(caption)
 
-                # prefix = "refer expressions:"
-                prefix = "visual grounding:"
-                # prefix = ""
-                source_text, target_text = preprocess.refer_expression(
-                    captions, self.args.n_ground, prefix=prefix, sort=False)
+            #     # prefix = "refer expressions:"
+            #     prefix = "visual grounding:"
+            #     # prefix = ""
+            #     source_text, target_text = preprocess.refer_expression(
+            #         captions, self.args.n_ground, prefix=prefix, sort=False)
 
-                sent = source_text
+            #     sent = source_text
 
-                loss_weight = self.args.ground_weight
+            #     loss_weight = self.args.ground_weight
             if task == 'captioning':
                 input_ids = []
             else:
@@ -613,30 +654,30 @@ class PretrainDataset(Dataset):
 
             out_dict['loss_weight'] = loss_weight
 
-            feats = np.zeros(shape=(self.n_boxes, 2048), dtype=np.float32)
-            try:
-                f[f'{img_id}/features'].read_direct(feats)
-            except KeyError:
-                print(uid)
-                print(source)
-                print(img_id)
-                exit()
+            # feats = np.zeros(shape=(self.n_boxes, 2048), dtype=np.float32)
+            # try:
+            #     f[f'{img_id}/features'].read_direct(feats)
+            # except KeyError:
+            #     print(uid)
+            #     print(source)
+            #     print(img_id)
+            #     exit()
 
-            feats = torch.from_numpy(feats)
+            feats = tensor_img
             out_dict['vis_feats'] = feats
 
             # Normalize the boxes (to 0 ~ 1)
-            img_h = f[f'{img_id}/img_h'][()]
-            img_w = f[f'{img_id}/img_w'][()]
-            boxes = f[f'{img_id}/boxes'][()]  # (x1, y1, x2, y2)
-            boxes[:, (0, 2)] /= img_w
-            boxes[:, (1, 3)] /= img_h
-            np.testing.assert_array_less(boxes, 1+1e-5)
-            # np.testing.assert_array_less(boxes, 1+5e-2)
-            np.testing.assert_array_less(-boxes, 0+1e-5)
-            boxes = torch.from_numpy(boxes)
-            boxes.clamp_(min=0.0, max=1.0)
-            out_dict['boxes'] = boxes
+            # img_h = f[f'{img_id}/img_h'][()]
+            # img_w = f[f'{img_id}/img_w'][()]
+            # boxes = f[f'{img_id}/boxes'][()]  # (x1, y1, x2, y2)
+            # boxes[:, (0, 2)] /= img_w
+            # boxes[:, (1, 3)] /= img_h
+            # np.testing.assert_array_less(boxes, 1+1e-5)
+            # # np.testing.assert_array_less(boxes, 1+5e-2)
+            # np.testing.assert_array_less(-boxes, 0+1e-5)
+            # boxes = torch.from_numpy(boxes)
+            # boxes.clamp_(min=0.0, max=1.0)
+            # out_dict['boxes'] = boxes
 
             return out_dict
 
@@ -839,7 +880,7 @@ class PretrainDataset(Dataset):
 
         args = self.args
 
-        V_L = len(batch[0]['boxes'])
+        V_L = len(batch[0]['vis_feats'])
 
         S_W_L = max(entry['input_length'] for entry in batch)
         T_W_L = max(entry['target_length'] for entry in batch)
@@ -849,8 +890,8 @@ class PretrainDataset(Dataset):
         input_ids = torch.ones(B, S_W_L, dtype=torch.long) * self.tokenizer.pad_token_id
         target_ids = torch.ones(B, T_W_L, dtype=torch.long) * self.tokenizer.pad_token_id
 
-        boxes = torch.zeros(B, V_L, 4, dtype=torch.float)
-        vis_feats = torch.zeros(B, V_L, feat_dim, dtype=torch.float)
+        # boxes = torch.zeros(B, V_L, 4, dtype=torch.float)
+        vis_feats = torch.zeros(B, V_L, feat_dim, feat_dim, dtype=torch.float)
 
         loss_weights = torch.ones(B, dtype=torch.float)
 
@@ -866,8 +907,8 @@ class PretrainDataset(Dataset):
             input_ids[i, :entry['input_length']] = entry['input_ids']
             target_ids[i, :entry['target_length']] = entry['target_ids']
 
-            boxes[i] += entry['boxes']
-            vis_feats[i] += entry['vis_feats']
+            # boxes[i] += entry['boxes']
+            vis_feats[i] = entry['vis_feats']
 
             if 'ans' in entry:
                 ans.append(entry['ans'])
@@ -886,6 +927,8 @@ class PretrainDataset(Dataset):
             if 'loss_weight' in entry:
                 loss_weights[i] = entry['loss_weight']
 
+        # vis_feats = self.vae.get_codebook_indices(vis_feats)
+
         assert 't5' in args.backbone or 'bart' in args.backbone
         word_mask = target_ids != self.tokenizer.pad_token_id
         target_ids[~word_mask] = -100
@@ -894,10 +937,12 @@ class PretrainDataset(Dataset):
         batch_entry['source_text'] = source_text
         batch_entry['target_text'] = target_text
 
+        # Todo
         batch_entry['input_ids'] = input_ids
         batch_entry['target_ids'] = target_ids
 
-        batch_entry['boxes'] = boxes
+        # Todo
+        # batch_entry['boxes'] = boxes
         batch_entry['vis_feats'] = vis_feats
 
         batch_entry['loss_weights'] = loss_weights

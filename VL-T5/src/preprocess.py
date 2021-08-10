@@ -72,10 +72,11 @@ def corrupt_spans(text, mask_ratio=0.15, prefix=None):
 
     masked_text = " ".join(masked_tokens)
 
-    if prefix is None:
-        source_text = masked_text
-    else:
-        source_text = f"{prefix} {masked_text}"
+    source_text = masked_text
+    # if prefix is None:
+    #     source_text = masked_text
+    # else:
+    #     source_text = f"{prefix} {masked_text}"
 
     target_text = " ".join(target_tokens)
 
@@ -308,15 +309,22 @@ def ground_caption(captions, n_ground=1, prefix="describe visual inputs:", sort=
 
     ground_indices = ground_indices.tolist()
 
-    source_text = [prefix]
+    # source_text = [prefix]
+    source_text = []
     target_text = []
 
-    if n_ground == 1:
-        idx = ground_indices[0]
-        source_text.append(f'<vis_extra_id_{idx}>')
-        target_text.append(f'{captions[idx]}')
-    else:
-        for j, idx in enumerate(ground_indices):
+    # if n_ground == 1:
+    #     idx = ground_indices[0]
+    #     source_text.append(f'<vis_extra_id_{idx}>')
+    #     target_text.append(f'{captions[idx]}')
+    # else:
+    #     for j, idx in enumerate(ground_indices):
+    #         source_text.append(f'<vis_extra_id_{idx}>')
+
+    #         target_text.append(f'<extra_id_{j}>')
+    #         target_text.append(f'{captions[idx]}')
+
+    for j, idx in enumerate(ground_indices):
             source_text.append(f'<vis_extra_id_{idx}>')
 
             target_text.append(f'<extra_id_{j}>')
@@ -359,7 +367,8 @@ def refer_expression(captions, n_ground=1, prefix="refer expressions:", sort=Tru
 
     ground_indices = ground_indices.tolist()
 
-    source_text = [prefix]
+    # source_text = [prefix]
+    source_text = []
     target_text = []
 
     if n_ground == 1:

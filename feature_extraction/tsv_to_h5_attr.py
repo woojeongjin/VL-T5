@@ -80,9 +80,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--tsv_path', type=str,
-                        default='/mnt/root/vlt5/datasets/conceptual_captions/train_feat/train_obj36_')
+                        default='/mnt/root/vlt5/datasets/conceptual_captions/train_feat_attr/train_obj36_')
     parser.add_argument('--h5_path', type=str,
-                        default='/mnt/root/vlt5/datasets/conceptual_captions/features/train_obj36_split_')
+                        default='/mnt/root/vlt5/datasets/conceptual_captions/features/train_obj36_split_attr_')
 
     parser.add_argument('--id', type=int,
                         default=0)
@@ -97,9 +97,11 @@ if __name__ == '__main__':
     # print('# data:', len(data))
 
     output_fname = args.h5_path+ str(args.id) + '.h5'
+
+
     print('features will be saved at', output_fname)
 
-    # for ii in range(48):
+
     ids = list(range(48))
     ids = [ids[i::24] for i in range(24)][args.id]
     for ii in ids:
@@ -111,6 +113,8 @@ if __name__ == '__main__':
                 img_id = datum['img_id']
 
                 num_boxes = datum['num_boxes']
+                if num_boxes != 36:
+                    continue
 
                 grp = f.create_group(img_id)
                 grp['features'] = datum['features'].reshape(num_boxes, 2048)
@@ -129,7 +133,7 @@ if __name__ == '__main__':
     # make_json('/home/woojeong/VL-T5/datasets/conceptual_captions/features/valid_obj36.h5', '/home/woojeong/VL-T5/datasets/conceptual_captions/annotations/val_imageId2Ann.tsv', 'cc_valid.json')
     # annot = []
 
-    # annot = make_json('/mnt/root/vlt5/datasets/conceptual_captions/features/train_obj36_3.h5', '/mnt/root/vlt5/datasets/conceptual_captions/annotations/train_imageId2Ann.tsv', annot)
+    # annot = make_json('/mnt/root/vlt5/datasets/conceptual_captions/features/train_obj36_attr.h5', '/mnt/root/vlt5/datasets/conceptual_captions/annotations/train_imageId2Ann.tsv', annot)
 
-    # with open('/mnt/root/vlt5/datasets/conceptual_captions/annotations/cc_train_3.json', "w", encoding='utf8') as f:
+    # with open('/mnt/root/vlt5/datasets/conceptual_captions/annotations/cc_train_attr.json', "w", encoding='utf8') as f:
     #     json.dump(annot, f, indent=4, sort_keys=True )

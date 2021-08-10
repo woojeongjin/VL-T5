@@ -45,8 +45,13 @@ class TrainerBase(object):
 
         self.verbose = True
         if self.args.distributed:
-            if self.args.gpu != 0:
-                self.verbose = False
+            if not args.is_master:
+                self.verbose=False
+            # if self.args.gpu != 0:
+            #     self.verbose = False
+            # if 'OMPI_COMM_WORLD_SIZE' in os.environ:
+            #     if not args.is_master:
+            #         self.verbose=False
 
         if self.args.tokenizer is None:
             self.args.tokenizer = self.args.backbone
@@ -55,12 +60,14 @@ class TrainerBase(object):
             set_global_logging_level(logging.ERROR, ["transformers"])
 
     def create_config(self):
-        from transformers import T5Config, BartConfig
+        from transformers import T5Config, BartConfig, GPT2Config
 
         if 't5' in self.args.backbone:
             config_class = T5Config
         elif 'bart' in self.args.backbone:
             config_class = BartConfig
+        elif 'gpt2' in self.args.backbone:
+            config_class = GPT2Config
         else:
             return None
 
@@ -86,6 +93,11 @@ class TrainerBase(object):
         config.share_vis_lang_layer_norm = args.share_vis_lang_layer_norm
         config.classifier = args.classifier
 
+        config.pretrained = args.pretrained
+        config.arch = args.arch
+        config.resnet_dim = args.resnet_dim
+        config.two_prefix = args.two_prefix
+
         return config
 
 
@@ -102,7 +114,7 @@ class TrainerBase(object):
         return model
 
     def create_tokenizer(self, **kwargs):
-        from transformers import T5Tokenizer, BartTokenizer, T5TokenizerFast, BartTokenizerFast
+        from transformers import T5Tokenizer, BartTokenizer, T5TokenizerFast, BartTokenizerFast, GPT2TokenizerFast
         from tokenization import VLT5Tokenizer, VLT5TokenizerFast
 
         if 't5' in self.args.tokenizer:
@@ -115,6 +127,8 @@ class TrainerBase(object):
         elif 'bart' in self.args.tokenizer:
             tokenizer_class = BartTokenizer
             # tokenizer_class = BartTokenizerFast
+        elif 'gpt2' in self.args.tokenizer:
+            tokenizer_class = GPT2TokenizerFast
 
         tokenizer_name = self.args.backbone
 
@@ -145,17 +159,36 @@ class TrainerBase(object):
                 print('Warmup ratio:', warmup_ratio)
                 print("Warm up Iters: %d" % warmup_iters)
 
+
             no_decay = ["bias", "LayerNorm.weight"]
+            params = list(filter(lambda p: p[1].requires_grad, self.model.named_parameters()))
+            param_1 = [p for n, p in params if not any(nd in n for nd in no_decay)]
+
+            param_2 = [p for n, p in params if any(nd in n for nd in no_decay)]
+            # grad_para_2 = filter(lambda p: p.requires_grad, param_2)
+
             optimizer_grouped_parameters = [
                 {
-                    "params": [p for n, p in self.model.named_parameters() if not any(nd in n for nd in no_decay)],
+                    "params": param_1,
                     "weight_decay": self.args.weight_decay,
                 },
                 {
-                    "params": [p for n, p in self.model.named_parameters() if any(nd in n for nd in no_decay)],
+                    "params": param_2,
                     "weight_decay": 0.0,
                 },
             ]
+
+            # no_decay = ["bias", "LayerNorm.weight"]
+            # optimizer_grouped_parameters = [
+            #     {
+            #         "params": [p for n, p in self.model.named_parameters() if not any(nd in n for nd in no_decay)],
+            #         "weight_decay": self.args.weight_decay,
+            #     },
+            #     {
+            #         "params": [p for n, p in self.model.named_parameters() if any(nd in n for nd in no_decay)],
+            #         "weight_decay": 0.0,
+            #     },
+            # ]
 
             optim = AdamW(optimizer_grouped_parameters,
                           lr=self.args.lr, eps=self.args.adam_eps)

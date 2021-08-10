@@ -15,16 +15,15 @@ storage:
 environment:
   image: pytorch/pytorch:1.6.0-cuda10.1-cudnn7-devel
   # image: mcr.microsoft.com/azureml/base-gpu:openmpi3.1.2-cuda10.0-cudnn7-ubuntu16.04
+  # image: mcr.microsoft.com/azureml/base-gpu:openmpi3.1.2-cuda10.1-cudnn7-ubuntu18.04
   registry: docker.io # any public registry can be specified here
   setup:
-    # - sudo pip install -U pip setuptools
-    # - sudo apt-get install git
-    # - pip install --upgrade pip
-    - sudo apt-get update -y
-    - sudo apt-get install -y libopenmpi-dev
-    - pip install git+https://github.com/j-min/language-evaluation.git
     - pip install -r requirements.txt
     - python -m spacy download en_core_web_sm
+  image_setup:
+    - apt-get update -y
+    - apt-get -y install openssh-client vim tmux sudo apt-transport-https apt-utils curl git wget lsb-release ca-certificates gnupg gcc g++ pv iftop openmpi-bin openmpi-common libopenmpi-dev
+    - pip install dalle-pytorch
 
 code:
   # local directory of the code. this will be uploaded to the server.
@@ -43,52 +42,317 @@ code:
 #       '40G8']
 
 jobs:
-- name: prefix
-  sku: G4
+
+- name: noqa_4gpus
+  sku : G4
   command:
-  - bash scripts/pretrain_VLT5_prefix.sh 4
+  - bash scripts/pretrain_VLT5.sh 4 --output /mnt/root/vlt5/pretrain/noqa --losses 'lm,ground_caption,refer,itm' 
 
-- name: prefix_only
-  sku: G8
-  command:
-  - bash scripts/pretrain_VLT5_prefixonly.sh 8
-
-- name: ar
-  sku: G8
-  command:
-  - bash scripts/pretrain_VLT5_ar.sh 8
-
-
-- name: prefix_no_desc
-  sku: G8
-  command:
-  - bash scripts/pretrain_VLT5_prefix.sh 8 --output /mnt/root/vlt5/pretrain/prefix_no_desc
-
-- name: lm_noun
-  sku: G8
-  command:
-  - bash scripts/pretrain_VLT5_lmnoun.sh 8 --output /mnt/root/vlt5/pretrain/lmnoun
-
-- name: captioning
+- name: noqa2
   sku : G8
   command:
-  - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/captioning --losses 'lm,captioning,ground_caption,refer,itm' 
+  - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/noqa2e-4 --losses 'lm,ground_caption,refer,itm'  --lr 2e-4
 
-- name: captioning_noeos
+- name: noqa_8gpus_1e-4
   sku : G8
   command:
-  - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/captioning_noeos --losses 'lm,captioning,ground_caption,refer,itm' --caption_no_eos
+  - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/noqa1e-4_8 --losses 'lm,ground_caption,refer,itm'  --lr 1e-4
 
-- name: caption_only_noeos
+- name: noqa_8gpus_2e-4_lmonly_noprefix
   sku : G8
   command:
-  - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/caption_only_noeostest --losses 'captioning,ground_caption,refer,itm' --caption_no_eos
+  - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/noqa2e-4_8_lmonly_noprefix --losses 'lm'  --lr 2e-4
 
-- name: caption_sku_count
+# - name: prefix
+#   sku: G4
+#   command:
+#   - bash scripts/pretrain_VLT5_prefix.sh 4
+
+# - name: prefix_only
+#   sku: G8
+#   command:
+#   - bash scripts/pretrain_VLT5_prefixonly.sh 8
+
+# - name: ar
+#   sku: G8
+#   command:
+#   - bash scripts/pretrain_VLT5_ar.sh 8
+
+
+# - name: prefix_no_desc
+#   sku: G8
+#   command:
+#   - bash scripts/pretrain_VLT5_prefix.sh 8 --output /mnt/root/vlt5/pretrain/prefix_no_desc
+
+# - name: lm_noun
+#   sku: G8
+#   command:
+#   - bash scripts/pretrain_VLT5_lmnoun.sh 8 --output /mnt/root/vlt5/pretrain/lmnoun
+
+# - name: captioning
+#   sku : G8
+#   command:
+#   - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/captioning --losses 'lm,captioning,ground_caption,refer,itm' 
+
+# - name: captioning_noeos
+#   sku : G8
+#   command:
+#   - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/captioning_noeos --losses 'lm,captioning,ground_caption,refer,itm' --caption_no_eos
+
+# - name: caption_only_noeos
+#   sku : G2
+#   command:
+#   - bash scripts/pretrain_VLT5.sh 2 --output /mnt/root/vlt5/pretrain/caption_only_noeostest --losses 'captioning,ground_caption,refer,itm' --caption_no_eos
+
+# - name: caption_sku_count
+#   sku : G8
+#   sku_count: 2
+#   aml_mpirun:
+#     process_count_per_node: 8
+#     communicator: "OpenMpi"
+#   command:
+#   - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/caption_only_noeostest2 --losses 'captioning,ground_caption,refer,itm' --caption_no_eos
+
+
+# - name: caption_sku_count_nosudo
+#   sku : G8
+#   sku_count: 2
+#   aml_mpirun:
+#     process_count_per_node: 8
+#     communicator: "OpenMpi"
+#   command:
+#   - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/caption_only_noeostest2 --losses 'captioning,ground_caption,refer,itm' --caption_no_eos
+
+
+# - name: caption_sku_count_sudo
+#   sku : G8
+#   sku_count: 2
+#   aml_mpirun:
+#     process_count_per_node: 8
+#     communicator: "OpenMpi"
+#   command:
+#   - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/caption_only_noeostest2 --losses 'captioning,ground_caption,refer,itm' --caption_no_eos
+
+
+
+
+# - name: cc_train
+#   sku : G8
+#   command:
+#   - bash scripts/pretrain_VLT5_cc.sh 8 --output /mnt/root/vlt5/pretrain/cc_train_base --losses 'lm,ground_caption,refer,itm'
+
+# - name: cc_train_base
+#   sku : G8
+#   sku_count: 2
+#   aml_mpirun:
+#     process_count_per_node: 8
+#     communicator: "OpenMpi"
+#   command:
+#   - bash scripts/pretrain_VLT5_base_cc_multi.sh 8 --output /mnt/root/vlt5/pretrain/cc_train_base_multi --losses 'lm,ground_caption,refer,itm'
+
+
+
+
+# - name: cc_train_base_caption
+#   sku : G8
+#   sku_count: 2
+#   aml_mpirun:
+#     process_count_per_node: 8
+#     communicator: "OpenMpi"
+#   command:
+#   - bash scripts/pretrain_VLT5_base_cc_multi.sh 8 --output /mnt/root/vlt5/pretrain/cc_train_base_multi_caption_noeos --losses 'captioning,lm,ground_caption,refer,itm'
+
+# - name: cc_train_large_caption
+#   sku : G8
+#   sku_count: 4
+#   aml_mpirun:
+#     process_count_per_node: 8
+#     communicator: "OpenMpi"
+#   command:
+#   - bash scripts/pretrain_VLT5_large_cc_multi.sh 8 --output /mnt/root/vlt5/pretrain/cc_train_large_multi_caption_noeos --losses 'captioning,lm,ground_caption,refer,itm'
+
+
+# - name: train_large
+#   sku : G8
+#   sku_count: 2
+#   aml_mpirun:
+#     process_count_per_node: 8
+#     communicator: "OpenMpi"
+#   command:
+#   - bash scripts/pretrain_VLT5_large_multi.sh 8 --output /mnt/root/vlt5/pretrain/train_large --losses 'lm,ground_caption,refer,itm'
+
+
+
+# - name: train_large_caption2
+#   sku : G8
+#   sku_count: 2
+#   aml_mpirun:
+#     process_count_per_node: 8
+#     communicator: "OpenMpi"
+#   command:
+#   - bash scripts/pretrain_VLT5_large_multi.sh 8 --output /mnt/root/vlt5/pretrain/train_large_caption_noeos --losses 'captioning,lm,ground_caption,refer,itm'
+
+
+
+# - name: rel_pos
+#   sku : G8
+#   sku_count: 2
+#   aml_mpirun:
+#     process_count_per_node: 8
+#     communicator: "OpenMpi"
+#   command:
+#   - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/relpos --losses 'lm,ground_caption,refer,itm' 
+
+- name: cc_train_large
+  sku : G8
+  sku_count: 4
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - bash scripts/pretrain_VLT5_large_cc_multi.sh 8 --output /mnt/root/vlt5/pretrain/cc_train_large_2.5e-4 --losses 'lm,ground_caption,refer,itm' --lr 2.5e-4
+
+
+- name: train_large
+  sku : G8
+  sku_count: 4
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - bash scripts/pretrain_VLT5_large_multi.sh 8 --output /mnt/root/vlt5/pretrain/train_large_2.5e-4 --losses 'lm,ground_caption,refer,itm' --lr 2.5e-4
+
+- name: train_large_8gpus
+  sku : G8
+  command:
+  - bash scripts/pretrain_VLT5_large.sh 8 --output /mnt/root/vlt5/pretrain/train_large_8gpus --losses 'lm,ground_caption,refer,itm' 
+
+
+
+# - name: train_large_5e-5
+#   sku : G8
+#   sku_count: 4
+#   aml_mpirun:
+#     process_count_per_node: 8
+#     communicator: "OpenMpi"
+#   command:
+#   - bash scripts/pretrain_VLT5_large_multi.sh 8 --output /mnt/root/vlt5/pretrain/train_large5e-5 --losses 'lm,ground_caption,refer,itm' --lr 5e-5
+
+
+# - name: train_resnet
+#   sku : G8
+#   sku_count: 2
+#   aml_mpirun:
+#     process_count_per_node: 8
+#     communicator: "OpenMpi"
+#   command:
+#   - bash scripts/pretrain_resnet.sh 8 --output /mnt/root/vlt5/pretrain/train_base_resnet --losses 'lm,itm'
+
+- name: train_resnet_twoprefix2
   sku : G8
   sku_count: 2
   aml_mpirun:
     process_count_per_node: 8
     communicator: "OpenMpi"
   command:
-  - bash scripts/pretrain_VLT5.sh 8 --output /mnt/root/vlt5/pretrain/caption_only_noeostest2 --losses 'captioning,ground_caption,refer,itm' --caption_no_eos
+  - bash scripts/pretrain_resnet.sh 8 --output /mnt/root/vlt5/pretrain/train_base_resnet_two --losses 'lm,itm' --two_prefix
+
+- name: resnet_twoprefix_lmonly
+  sku : G8
+  command:
+  - bash scripts/pretrain_resnet.sh 8 --output /mnt/root/vlt5/pretrain/train_base_resnet_two_lmonly --losses 'lm' --two_prefix --lr 2e-4
+
+- name: resnet_twoprefix_lmonly_frozen
+  sku : G8
+  command:
+  - bash scripts/pretrain_resnet.sh 8 --output /mnt/root/vlt5/pretrain/train_base_resnet_two_lmonly_frozen --losses 'lm' --two_prefix --freeze_text --lr 2e-4
+
+
+
+- name: vae
+  sku : G8
+  sku_count: 4
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - bash scripts/pretrain_vae.sh 8 --output /mnt/root/vlt5/pretrain/train_base_vae --losses 'lm,itm' --batch_size 10
+
+- name: vae_frozen
+  sku : G8
+  sku_count: 4
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - bash scripts/pretrain_vae.sh 8 --output /mnt/root/vlt5/pretrain/train_base_vae_frozen --losses 'lm,itm' --batch_size 10 --freeze_text
+
+
+- name: train_text_frozen
+  sku : G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - bash scripts/pretrain_VLT5_base_multi.sh 8 --output /mnt/root/vlt5/pretrain/train_text_frozen --losses 'lm,ground_caption,refer,itm' --freeze_text
+
+
+- name: cc_train_base_upsample
+  sku : G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - bash scripts/pretrain_VLT5_cc_upsample.sh 8 --output /mnt/root/vlt5/pretrain/cc_train_base_upsample --losses 'lm,ground_caption,refer,itm'
+
+
+# - name: frozen
+#   sku : G8
+#   sku_count: 2
+#   aml_mpirun:
+#     process_count_per_node: 8
+#     communicator: "OpenMpi"
+
+#   - bash scripts/pretrain_frozen.sh 8 --output /mnt/root/vlt5/pretrain/frozen 
+
+- name: frozen
+  sku : G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - bash scripts/pretrain_frozen.sh 8 --output /mnt/root/vlt5/pretrain/frozen 
+
+- name: frozen_again
+  sku : G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - bash scripts/pretrain_frozen.sh 8 --output /mnt/root/vlt5/pretrain/frozen_again
+
+
+- name: frozen_cc
+  sku : G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - bash scripts/pretrain_frozen.sh 8 --output /mnt/root/vlt5/pretrain/frozen_cc --train cc_train --valid cc_valid 
+
+
+- name: cc_only_train
+  sku : G8
+  command:
+  - bash scripts/pretrain_VLT5_cc.sh 8 --output /mnt/root/vlt5/pretrain/cc_train_base_only --losses 'lm,ground_caption,refer,itm' --train cc_train --valid cc_valid --lr 2e-4
+
+
+- name: cc_only_train_vqa
+  sku : G8
+  command:
+  - bash scripts/VQA_VLT5.sh 8 --output /mnt/root/vlt5/vqa/cc_train_base_only --load /mnt/root/vlt5/pretrain/cc_train_base_only/Epoch30

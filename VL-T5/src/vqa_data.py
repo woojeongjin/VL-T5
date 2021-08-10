@@ -19,8 +19,10 @@ from transformers import T5TokenizerFast, BartTokenizer
 from tokenization import VLT5TokenizerFast
 
 
-project_dir = Path(__file__).resolve().parent.parent  # VLT5
-workspace_dir = project_dir.parent
+# project_dir = Path(__file__).resolve().parent.parent  # VLT5
+# workspace_dir = project_dir.parent
+# dataset_dir = workspace_dir.joinpath('datasets/').resolve()
+workspace_dir = Path('/mnt/root/vlt5')
 dataset_dir = workspace_dir.joinpath('datasets/').resolve()
 coco_dir = dataset_dir.joinpath('COCO')
 vg_dir = dataset_dir.joinpath('VG')
@@ -179,7 +181,11 @@ class VQAFineTuneDataset(Dataset):
         elif 'question' in datum:
             sent = datum['question']
 
-        input_ids = self.tokenizer.encode(f'vqa: {sent}', max_length=20, truncation=True)
+        input_ids = self.tokenizer.encode(sent, max_length=20, truncation=True)
+        # if self.args.no_prefix:
+        #     input_ids = self.tokenizer.encode(sent, max_length=20, truncation=True)
+        # else:
+        #     input_ids = self.tokenizer.encode(f'vqa: {sent}', max_length=20, truncation=True)
 
         question_id = datum['question_id']
         out_dict['question_id'] = question_id

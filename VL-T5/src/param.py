@@ -79,6 +79,14 @@ def parse_args(parse=True, **optional_kwargs):
     parser.add_argument("--distributed", action='store_true')
     parser.add_argument("--num_workers", default=0, type=int)
     parser.add_argument('--local_rank', type=int, default=-1)
+    parser.add_argument("--master-port", type=int, default=-1,
+                    help="Master port (for multi-node SLURM jobs)")
+    parser.add_argument("--cpu",
+                            action='store_true',
+                            help="Whether not to use CUDA when available")
+    parser.add_argument("--ddp-backend", type=str, default='pytorch', choices=['pytorch', 'apex'])
+    parser.add_argument("--debug-slurm", action='store_true',
+                        help="Debug multi-GPU / multi-node within a SLURM job")
 
     # Model Config
     parser.add_argument('--backbone', type=str, default='t5-base')
@@ -96,6 +104,8 @@ def parse_args(parse=True, **optional_kwargs):
     parser.add_argument('--n_boxes', type=int, default=36)
     parser.add_argument('--max_n_boxes', type=int, default=36)
     parser.add_argument('--max_text_length', type=int, default=20)
+
+    parser.add_argument('--image_size', type=float, default=8192)
 
     # Training
     parser.add_argument('--batch_size', type=int, default=256)
@@ -140,9 +150,19 @@ def parse_args(parse=True, **optional_kwargs):
     parser.add_argument('--itm_cocoonly', default=True, type=str2bool)
     parser.add_argument('--single_vqa_prefix', action='store_true')
     parser.add_argument('--caption_no_eos', action='store_true')
+    parser.add_argument('--freeze_text', action='store_true')
+    parser.add_argument('--vis_size', type=int, default=2)
+
+    # Resnet
+    parser.add_argument('--pretrained', default=True, type=str2bool)
+    parser.add_argument("--arch", default='resnext50_32x4d', type=str)
+    parser.add_argument('--resnet_dim', type=float, default=1000)
+    parser.add_argument('--two_prefix', action='store_true')
 
     # COCO Caption
     parser.add_argument('--no_prefix', action='store_true')
+
+    parser.add_argument("--BUTD100", action='store_true')
 
     # VQA
     parser.add_argument("--raw_label", action='store_true')

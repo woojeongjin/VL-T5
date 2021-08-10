@@ -15,12 +15,10 @@ export WANDB_API_KEY=9fe5e176e6d0edecf332cdf97a58020645efb6d4
 PYTHONPATH=$PYTHONPATH:./src \
 # export NCCL_DEBUG=INFO; \
 export NGPU=$1
-python -m torch.distributed.launch \
-    --nproc_per_node=$1 \
-    src/pretrain.py \
+python src/pretrain.py \
         --distributed --multiGPU --fp16 \
-        --train mscoco_resplit_train,vgnococo \
-        --valid mscoco_resplit_val \
+        --train mscoco_resplit_train,vgnococo,cc_train,mscoco_resplit_train,mscoco_resplit_train,mscoco_resplit_train,mscoco_resplit_train \
+        --valid mscoco_resplit_val,cc_valid \
         --batch_size 320 \
         --optim adamw \
         --warmup_ratio 0.05 \

@@ -16,7 +16,7 @@ import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 
 from param import parse_args
-from pretrain_data import get_loader
+from pretrain_frozen_data import get_loader
 from utils import LossMeter
 from dist_utils import reduce_dict
 
@@ -47,32 +47,17 @@ class Trainer(TrainerBase):
             test_loader=test_loader,
             train=train)
 
-        from pretrain_model import VLT5Pretraining, VLBartPretraining
+        from pretrain_frozen_model import FROZENPretraining 
 
         model_kwargs = {}
-        if 't5' in args.backbone:
-            model_class = VLT5Pretraining
-        elif 'bart' in args.backbone:
-            model_class = VLBartPretraining
+        model_class = FROZENPretraining
 
         config = self.create_config()
         self.tokenizer = self.create_tokenizer()
-        if 'bart' in self.args.tokenizer:
-            num_added_toks = 0
-            if config.use_vis_order_embedding:
-                additional_special_tokens = [f'<extra_id_{i}>' for i in range(100-1, -1, -1)] + \
-                        [f'<vis_extra_id_{i}>' for i in range(100-1, -1, -1)]
-                special_tokens_dict = {'additional_special_tokens': additional_special_tokens}
-                num_added_toks = self.tokenizer.add_special_tokens(special_tokens_dict)
-
-                config.default_obj_order_ids = self.tokenizer.convert_tokens_to_ids([f'<vis_extra_id_{i}>' for i in range(100)])
 
         self.model = self.create_model(model_class, config, **model_kwargs)
 
-        if 't5' in self.args.tokenizer:
-            self.model.resize_token_embeddings(self.tokenizer.vocab_size)
-        elif 'bart' in self.args.tokenizer:
-            self.model.resize_token_embeddings(self.model.model.shared.num_embeddings + num_added_toks)
+        self.model.resize_token_embeddings(self.tokenizer.vocab_size)
 
         self.model.tokenizer = self.tokenizer
 
@@ -96,6 +81,11 @@ class Trainer(TrainerBase):
         self.model = self.model.to(device)
 
         # Optimizer
+        # if self.args.freeze_text:
+        for name, param in self.model.named_parameters():
+            if 'visual_embedding' not in name and'resnet' not in name:
+                param.requires_grad = False
+                
         if train:
             self.optim, self.lr_scheduler = self.create_optimizer_and_scheduler()
 
@@ -123,10 +113,8 @@ class Trainer(TrainerBase):
             loss_meters = [LossMeter() for _ in range(len(LOSSES_NAME))]
             best_eval_loss = 9595.
 
-            if 't5' in self.args.backbone:
-                project_name = "VLT5_Pretrain2"
-            elif 'bart' in self.args.backbone:
-                project_name = "VLBart_Pretrain"
+            project_name = "Frozen"
+
 
             wandb.init(project=project_name)
             wandb.run.name = self.args.run_name
@@ -141,11 +129,8 @@ class Trainer(TrainerBase):
         if self.args.distributed:
             dist.barrier()
 
-        if self.args.freeze_text:
-            for name, param in self.model.named_parameters():
-                if 'visual_embedding' not in name:
-                    param.requires_grad = False
-
+        # if self.args.freeze_text:
+        
         global_step = 0
         for step, epoch in enumerate(range(self.args.epochs)):
             if self.start_epoch is not None:
@@ -299,35 +284,6 @@ class Trainer(TrainerBase):
                 losses_str += '\n'
                 print(losses_str)
 
-            if 'qa' in self.args.losses:
-                dset2score, dset2cnt, score, cnt = self.val_loader.dataset.evaluator.evaluate(valid_uid2ans)
-
-                if len(dset2score) == 0:
-                    dset2score = {'vqa': 0, 'gqa': 0, 'visual7w': 0}
-                    dset2cnt = {'vqa': 1, 'gqa': 1, 'visual7w': 1}
-                    cnt = 3
-                    score = 0
-
-                dset2score = reduce_dict(dset2score, average=False)
-                dset2cnt = reduce_dict(dset2cnt, average=False)
-                score_cnt_dict = reduce_dict({'score': score, 'cnt': cnt}, average=False)
-
-                # if self.args.gpu == 0:
-                if self.verbose:
-                    score = score_cnt_dict['score']
-                    cnt = score_cnt_dict['cnt']
-                    accu = score / cnt
-                    dset2accu = {}
-                    for dset in dset2cnt:
-                        dset2accu[dset] = dset2score[dset] / dset2cnt[dset]
-                    accu_str = "Overall QA Acc %0.4f" % (accu)
-                    wandb.log({f'Valid QA Acc/Overall': accu}, step=epoch)
-                    sorted_keys = sorted(dset2accu.keys())
-                    for key in sorted_keys:
-                        accu_str += ", %s Acc %0.4f" % (key, dset2accu[key])
-                        wandb.log({f'Valid QA Acc/{key}': dset2accu[key]}, step=epoch)
-                    print(accu_str)
-                    accu_str += '\n\n'
 
             dist.barrier()
 
@@ -368,10 +324,6 @@ class Trainer(TrainerBase):
                 else:
                     results = self.model.valid_step(batch)
 
-                if 'qa' in self.args.losses:
-                    qa_pred = results['qa_pred']
-                    for uid, ans in zip(batch['uid'], qa_pred):
-                        uid2ans[uid] = ans
 
                 for k, v in results.items():
                     if k in epoch_results:

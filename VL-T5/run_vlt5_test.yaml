@@ -1,0 +1,133 @@
+description: VLT5 test
+
+target:
+  service: amlk8s
+  # run "amlt target list amlk8s" to list the names of available AMLK8s targets
+  name: itp-scus-v100
+  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-wjin
+    mount_dir: /mnt/root
+
+# environment:
+#   image: woojeong/vlt5:latest
+#   registry: docker.io # any public registry can be specified here
+#   # setup:
+#   #   - python -m spacy download en_core_web_sm 
+#     # - conda init bash
+#     # - source $$(conda info --base)/etc/profile.d/conda.sh
+#     # - conda activate vlt5
+#     # - pip install -r requirements.txt
+
+environment:
+  image: pytorch/pytorch:1.6.0-cuda10.1-cudnn7-devel
+  # image: mcr.microsoft.com/azureml/base-gpu:openmpi3.1.2-cuda10.0-cudnn7-ubuntu16.04
+  # image: mcr.microsoft.com/azureml/base-gpu:openmpi3.1.2-cuda10.1-cudnn7-ubuntu18.04
+  registry: docker.io # any public registry can be specified here
+  setup:
+    - pip install -r requirements.txt
+    - python -m spacy download en_core_web_sm
+  image_setup:
+    - apt-get update -y
+    - apt-get -y install openssh-client vim tmux sudo apt-transport-https apt-utils curl git wget lsb-release ca-certificates gnupg gcc g++ pv iftop openmpi-bin openmpi-common libopenmpi-dev
+    
+
+
+code:
+  # local directory of the code. this will be uploaded to the server.
+  # $CONFIG_DIR is expanded to the directory of this config file
+  # local_dir: $CONFIG_DIR/src
+  local_dir: $CONFIG_DIR
+
+# data:
+#   data upload is not required for this example
+
+# list of jobs to run, we run 2 jobs in this example
+
+# sku:
+#     - Field SKU ('G9') should be one of ['G0', 'G1', 'G2', 'G4', 'G8', 'G16', '16G1',
+#       '16G4', '16G8', '24G1', '24G2', '24G4', '24G8', '32G4', '32G8', '32G16', '64G4',
+#       '40G8']
+
+jobs:
+
+# cc base model
+- name: test_caption_ccbase
+  sku : G2
+  command:
+  - bash scripts/COCOCaption_test_VLT5.sh 2 --output /mnt/root/vlt5/COCOCaption/test --backbone 't5-base' --load /mnt/root/vlt5/pretrain/cc_train_base_multi/Epoch30
+
+# cc base caption model
+- name: test_caption_ccbase_caption
+  sku : G2
+  command:
+  - bash scripts/COCOCaption_test_VLT5.sh 2 --output /mnt/root/vlt5/COCOCaption/test --backbone 't5-base'  --load /mnt/root/vlt5/pretrain/cc_train_base_multi_caption/Epoch30
+
+# cc large model
+- name: test_caption_cclarge
+  sku : G2
+  command:
+  - bash scripts/COCOCaption_test_VLT5.sh 2 --output /mnt/root/vlt5/COCOCaption/test --backbone 't5-large' --load /mnt/root/vlt5/pretrain/cc_train_large_multi/Epoch30
+
+# cc large caption model
+- name: test_caption_cclarge_caption
+  sku : G2
+  command:
+  - bash scripts/COCOCaption_test_VLT5.sh 2 --output /mnt/root/vlt5/COCOCaption/test --backbone 't5-large' --load /mnt/root/vlt5/pretrain/cc_train_large_multi_caption/Epoch30
+
+# coco large model
+- name: test_caption_large
+  sku : G2
+  command:
+  - bash scripts/COCOCaption_test_VLT5.sh 2 --output /mnt/root/vlt5/COCOCaption/test --backbone 't5-large' --load /mnt/root/vlt5/pretrain/train_large/Epoch30
+
+
+# coco large caption model
+- name: test_caption_large_caption
+  sku : G2
+  command:
+  - bash scripts/COCOCaption_test_VLT5.sh 2 --output /mnt/root/vlt5/COCOCaption/test --backbone 't5-large' --load /mnt/root/vlt5/pretrain/train_large_caption/Epoch30
+
+
+# cc base model
+- name: test_vqa_ccbase
+  sku : G2
+  command:
+  - bash scripts/VQA_test_VLT5.sh 2 --output /mnt/root/vlt5/VQA/test --backbone 't5-base' --load /mnt/root/vlt5/pretrain/cc_train_base_multi/Epoch30
+
+# cc base caption model
+- name: test_vqa_ccbase_caption
+  sku : G2
+  command:
+  - bash scripts/VQA_test_VLT5.sh 2 --output /mnt/root/vlt5/VQA/test --backbone 't5-base' --load /mnt/root/vlt5/pretrain/cc_train_base_multi_caption/Epoch30
+
+# cc large model
+- name: test_vqa_cclarge
+  sku : G2
+  command:
+  - bash scripts/VQA_test_VLT5.sh 2 --output /mnt/root/vlt5/VQA/test --backbone 't5-large' --load /mnt/root/vlt5/pretrain/cc_train_large_multi/Epoch30
+
+# cc large caption model
+- name: test_vqa_cclarge_caption
+  sku : G2
+  command:
+  - bash scripts/VQA_test_VLT5.sh 2 --output /mnt/root/vlt5/VQA/test --backbone 't5-large' --load /mnt/root/vlt5/pretrain/cc_train_large_multi_caption/Epoch30
+
+# coco large model
+- name: test_vqa_large
+  sku : G2
+  command:
+  - bash scripts/VQA_test_VLT5.sh 2 --output /mnt/root/vlt5/VQA/test --backbone 't5-large' --load /mnt/root/vlt5/pretrain/train_large/Epoch30
+
+
+# coco large caption model
+- name: test_vqa_large_caption
+  sku : G2
+  command:
+  - bash scripts/VQA_test_VLT5.sh 2 --output /mnt/root/vlt5/VQA/test --backbone 't5-large' --load /mnt/root/vlt5/pretrain/train_large_caption/Epoch30
+
+
+

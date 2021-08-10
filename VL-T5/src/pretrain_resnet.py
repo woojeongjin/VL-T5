@@ -16,7 +16,7 @@ import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 
 from param import parse_args
-from pretrain_data import get_loader
+from pretrain_resnet_data import get_loader
 from utils import LossMeter
 from dist_utils import reduce_dict
 
@@ -47,7 +47,7 @@ class Trainer(TrainerBase):
             test_loader=test_loader,
             train=train)
 
-        from pretrain_model import VLT5Pretraining, VLBartPretraining
+        from pretrain_resnet_model import VLT5Pretraining, VLBartPretraining
 
         model_kwargs = {}
         if 't5' in args.backbone:
@@ -56,6 +56,7 @@ class Trainer(TrainerBase):
             model_class = VLBartPretraining
 
         config = self.create_config()
+        config.image_size = args.image_size
         self.tokenizer = self.create_tokenizer()
         if 'bart' in self.args.tokenizer:
             num_added_toks = 0
@@ -124,7 +125,7 @@ class Trainer(TrainerBase):
             best_eval_loss = 9595.
 
             if 't5' in self.args.backbone:
-                project_name = "VLT5_Pretrain2"
+                project_name = "VLT5_Pretrain_Resnet"
             elif 'bart' in self.args.backbone:
                 project_name = "VLBart_Pretrain"
 
@@ -143,7 +144,7 @@ class Trainer(TrainerBase):
 
         if self.args.freeze_text:
             for name, param in self.model.named_parameters():
-                if 'visual_embedding' not in name:
+                if 'visual_embedding' not in name and'resnet' not in name:
                     param.requires_grad = False
 
         global_step = 0

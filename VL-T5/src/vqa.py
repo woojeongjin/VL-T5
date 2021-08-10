@@ -150,142 +150,146 @@ class Trainer(TrainerBase):
             dist.barrier()
 
         global_step = 0
-        for epoch in range(self.args.epochs):
-            if self.start_epoch is not None:
-                epoch += self.start_epoch
-            self.model.train()
-            if self.args.distributed:
-                self.train_loader.sampler.set_epoch(epoch)
-            if self.verbose:
-                pbar = tqdm(total=len(self.train_loader), ncols=120)
+        if not self.args.test_only:
+            for epoch in range(self.args.epochs):
+                if self.start_epoch is not None:
+                    epoch += self.start_epoch
+                self.model.train()
+                if self.args.distributed:
+                    self.train_loader.sampler.set_epoch(epoch)
+                if self.verbose:
+                    pbar = tqdm(total=len(self.train_loader), ncols=120)
 
-            epoch_results = {
-                'loss': 0.,
+                epoch_results = {
+                    'loss': 0.,
 
-            }
+                }
 
-            quesid2ans = {}
+                quesid2ans = {}
 
-            for step_i, batch in enumerate(self.train_loader):
+                for step_i, batch in enumerate(self.train_loader):
 
-                if self.args.fp16 and _use_native_amp:
-                    with autocast():
+                    if self.args.fp16 and _use_native_amp:
+                        with autocast():
+                            if self.args.distributed:
+                                results = self.model.module.train_step(batch)
+                            else:
+                                results = self.model.train_step(batch)
+                    else:
                         if self.args.distributed:
                             results = self.model.module.train_step(batch)
                         else:
                             results = self.model.train_step(batch)
-                else:
-                    if self.args.distributed:
-                        results = self.model.module.train_step(batch)
-                    else:
-                        results = self.model.train_step(batch)
 
-                loss = results['loss']
+                    loss = results['loss']
 
-                if self.args.fp16 and _use_native_amp:
-                    self.scaler.scale(loss).backward()
-                elif self.args.fp16 and _use_apex:
-                    with amp.scale_loss(loss, self.optim) as scaled_loss:
-                        scaled_loss.backward()
-                else:
-                    loss.backward()
-
-                loss = loss.detach()
-
-                # Update Parameters
-                if self.args.clip_grad_norm > 0:
                     if self.args.fp16 and _use_native_amp:
-                        self.scaler.unscale_(self.optim)
-                        torch.nn.utils.clip_grad_norm_(
-                            self.model.parameters(), self.args.clip_grad_norm)
+                        self.scaler.scale(loss).backward()
                     elif self.args.fp16 and _use_apex:
-                        torch.nn.utils.clip_grad_norm_(amp.master_params(
-                            self.optim), self.args.clip_grad_norm)
+                        with amp.scale_loss(loss, self.optim) as scaled_loss:
+                            scaled_loss.backward()
                     else:
-                        torch.nn.utils.clip_grad_norm_(
-                            self.model.parameters(), self.args.clip_grad_norm)
+                        loss.backward()
 
-                if self.args.fp16 and _use_native_amp:
-                    self.scaler.step(self.optim)
-                    self.scaler.update()
-                else:
-                    self.optim.step()
+                    loss = loss.detach()
 
-                if self.lr_scheduler:
-                    self.lr_scheduler.step()
-                for param in self.model.parameters():
-                    param.grad = None
+                    # Update Parameters
+                    if self.args.clip_grad_norm > 0:
+                        if self.args.fp16 and _use_native_amp:
+                            self.scaler.unscale_(self.optim)
+                            torch.nn.utils.clip_grad_norm_(
+                                self.model.parameters(), self.args.clip_grad_norm)
+                        elif self.args.fp16 and _use_apex:
+                            torch.nn.utils.clip_grad_norm_(amp.master_params(
+                                self.optim), self.args.clip_grad_norm)
+                        else:
+                            torch.nn.utils.clip_grad_norm_(
+                                self.model.parameters(), self.args.clip_grad_norm)
 
-                global_step += 1
-
-                for k, v in results.items():
-                    if k in epoch_results:
-                        epoch_results[k] += v.item()
-
-                if self.lr_scheduler:
-                    if version.parse(torch.__version__) >= version.parse("1.4"):
-                        lr = self.lr_scheduler.get_last_lr()[0]
+                    if self.args.fp16 and _use_native_amp:
+                        self.scaler.step(self.optim)
+                        self.scaler.update()
                     else:
-                        lr = self.lr_scheduler.get_lr()[0]
-                else:
-                    try:
-                        lr = self.optim.get_lr()[0]
-                    except AttributeError:
-                        lr = self.args.lr
+                        self.optim.step()
+
+                    if self.lr_scheduler:
+                        self.lr_scheduler.step()
+                    for param in self.model.parameters():
+                        param.grad = None
+
+                    global_step += 1
+
+                    for k, v in results.items():
+                        if k in epoch_results:
+                            epoch_results[k] += v.item()
+
+                    if self.lr_scheduler:
+                        if version.parse(torch.__version__) >= version.parse("1.4"):
+                            lr = self.lr_scheduler.get_last_lr()[0]
+                        else:
+                            lr = self.lr_scheduler.get_lr()[0]
+                    else:
+                        try:
+                            lr = self.optim.get_lr()[0]
+                        except AttributeError:
+                            lr = self.args.lr
+
+                    if self.verbose:
+                        loss_meter.update(loss.item())
+                        desc_str = f'Epoch {epoch} | LR {lr:.6f}'
+                        desc_str += f' | Loss {loss_meter.val:4f}'
+
+                        pbar.set_description(desc_str)
+                        pbar.update(1)
+
+                    if self.args.distributed:
+                        dist.barrier()
 
                 if self.verbose:
-                    loss_meter.update(loss.item())
-                    desc_str = f'Epoch {epoch} | LR {lr:.6f}'
-                    desc_str += f' | Loss {loss_meter.val:4f}'
+                    pbar.close()
 
-                    pbar.set_description(desc_str)
-                    pbar.update(1)
+                # Validation
+                score_dict = self.evaluate(self.val_loader)
+
+                if self.verbose:
+                    valid_score = score_dict['topk_score'] * 100.
+                    valid_score_raw = score_dict['overall']
+                    if valid_score_raw > best_valid or epoch == 0:
+                        best_valid = valid_score_raw
+                        best_epoch = epoch
+                        self.save("BEST")
+
+                    log_str = ''
+                    log_str += "\nEpoch %d: Valid Raw %0.2f Topk %0.2f" % (epoch, valid_score_raw, valid_score)
+                    log_str += "\nEpoch %d: Best Raw %0.2f\n" % (best_epoch, best_valid)
+
+                    wandb_log_dict = {}
+                    wandb_log_dict['Train/Loss'] = epoch_results['loss'] / len(self.train_loader)
+
+                    wandb_log_dict['Valid/score'] = valid_score
+
+                    wandb_log_dict['Valid/raw_score'] = score_dict['overall']
+                    for qtype, score in score_dict['perQuestionType'].items():
+                        wandb_log_dict[f'Valid_Qtypes/{qtype}'] = score
+                    for atype, score in score_dict['perAnswerType'].items():
+                        if atype == 'yes/no':
+                            atype = 'yes_no'
+                        wandb_log_dict[f'Valid_Atypes/{atype}'] = score
+
+                    wandb.log(wandb_log_dict, step=epoch)
+                    print(log_str)
 
                 if self.args.distributed:
                     dist.barrier()
 
             if self.verbose:
-                pbar.close()
-
-            # Validation
-            score_dict = self.evaluate(self.val_loader)
-
-            if self.verbose:
-                valid_score = score_dict['topk_score'] * 100.
-                valid_score_raw = score_dict['overall']
-                if valid_score_raw > best_valid or epoch == 0:
-                    best_valid = valid_score_raw
-                    best_epoch = epoch
-                    self.save("BEST")
-
-                log_str = ''
-                log_str += "\nEpoch %d: Valid Raw %0.2f Topk %0.2f" % (epoch, valid_score_raw, valid_score)
-                log_str += "\nEpoch %d: Best Raw %0.2f\n" % (best_epoch, best_valid)
-
-                wandb_log_dict = {}
-                wandb_log_dict['Train/Loss'] = epoch_results['loss'] / len(self.train_loader)
-
-                wandb_log_dict['Valid/score'] = valid_score
-
-                wandb_log_dict['Valid/raw_score'] = score_dict['overall']
-                for qtype, score in score_dict['perQuestionType'].items():
-                    wandb_log_dict[f'Valid_Qtypes/{qtype}'] = score
-                for atype, score in score_dict['perAnswerType'].items():
-                    if atype == 'yes/no':
-                        atype = 'yes_no'
-                    wandb_log_dict[f'Valid_Atypes/{atype}'] = score
-
-                wandb.log(wandb_log_dict, step=epoch)
-                print(log_str)
-
-            if self.args.distributed:
-                dist.barrier()
-
-        if self.verbose:
-            self.save("LAST")
+                self.save("LAST")
 
         # Test Set
-        best_path = os.path.join(self.args.output, 'BEST')
+        if self.args.test_only:
+            best_path = self.args.load
+        else:
+            best_path = os.path.join(self.args.output, 'BEST')
         self.load(best_path)
 
         quesid2ans = self.predict(self.test_loader)
@@ -294,7 +298,7 @@ class Trainer(TrainerBase):
             evaluator = self.test_loader.evaluator
             score_dict = evaluator.evaluate(quesid2ans)
 
-            evaluator.dump_result(quesid2ans)
+            evaluator.dump_result(quesid2ans, 'test_result.json')
 
             acc_dict_all = evaluator.evaluate_raw(quesid2ans)
             acc_dict_answerable = evaluator.evaluate_raw(quesid2ans, is_topk_optimal=True)
@@ -312,7 +316,7 @@ class Trainer(TrainerBase):
                     atype = 'yes_no'
                 wandb_log_dict[f'Test_Atypes/{atype}'] = score
 
-            print(wandb_log_dict)
+            # print(wandb_log_dict)
             wandb.log(wandb_log_dict)
 
         if self.args.submit:
@@ -418,6 +422,10 @@ def main_worker(gpu, args):
         workers=4,
         topk=args.valid_topk,
     )
+    if gpu == 0:
+        args.is_master = True
+    else:
+        args.is_master = False
 
     trainer = Trainer(args, train_loader, val_loader, test_loader, train=True)
 

@@ -17,8 +17,10 @@ from torch.utils.data.distributed import DistributedSampler
 from transformers import T5TokenizerFast, BartTokenizer
 from tokenization import VLT5TokenizerFast
 
-project_dir = Path(__file__).resolve().parent.parent  # VLT5
-workspace_dir = project_dir.parent
+# project_dir = Path(__file__).resolve().parent.parent  # VLT5
+# workspace_dir = project_dir.parent
+# dataset_dir = workspace_dir.joinpath('datasets/').resolve()
+workspace_dir = Path('/mnt/root/vlt5')
 dataset_dir = workspace_dir.joinpath('datasets/').resolve()
 coco_dir = dataset_dir.joinpath('COCO')
 vg_dir = dataset_dir.joinpath('VG')
