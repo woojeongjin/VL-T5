@@ -262,6 +262,11 @@ jobs:
   command:
   - bash scripts/pretrain_resnet.sh 8 --output /mnt/root/vlt5/pretrain/train_base_resnet_two_lmonly --losses 'lm' --two_prefix --lr 2e-4
 
+- name: resnet_again_original_pos
+  sku : G8
+  command:
+  - bash scripts/pretrain_resnet.sh 8 --output /mnt/root/vlt5/pretrain/train_base_resnet_lmonly_original_pos --losses 'lm' --two_prefix --lr 2e-4
+
 - name: resnet_twoprefix_lmonly_frozen
   sku : G8
   command:
@@ -271,12 +276,12 @@ jobs:
 
 - name: vae
   sku : G8
-  sku_count: 4
+  sku_count: 2
   aml_mpirun:
     process_count_per_node: 8
     communicator: "OpenMpi"
   command:
-  - bash scripts/pretrain_vae.sh 8 --output /mnt/root/vlt5/pretrain/train_base_vae --losses 'lm,itm' --batch_size 10
+  - bash scripts/pretrain_vae.sh 8 --output /mnt/root/vlt5/pretrain/train_base_vae --losses 'lm' 
 
 - name: vae_frozen
   sku : G8
@@ -326,14 +331,24 @@ jobs:
   command:
   - bash scripts/pretrain_frozen.sh 8 --output /mnt/root/vlt5/pretrain/frozen 
 
-- name: frozen_again
+- name: frozen_large
   sku : G8
   sku_count: 2
   aml_mpirun:
     process_count_per_node: 8
     communicator: "OpenMpi"
   command:
-  - bash scripts/pretrain_frozen.sh 8 --output /mnt/root/vlt5/pretrain/frozen_again
+  - bash scripts/pretrain_frozen_large.sh 8 --output /mnt/root/vlt5/pretrain/frozen_large 
+
+- name: frozen_no_freeze
+  sku : G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - bash scripts/pretrain_frozen.sh 8 --output /mnt/root/vlt5/pretrain/frozen_no_freeze 
+
 
 
 - name: frozen_cc
@@ -350,6 +365,17 @@ jobs:
   sku : G8
   command:
   - bash scripts/pretrain_VLT5_cc.sh 8 --output /mnt/root/vlt5/pretrain/cc_train_base_only --losses 'lm,ground_caption,refer,itm' --train cc_train --valid cc_valid --lr 2e-4
+
+
+- name: cc_only_train_large
+  sku : G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - bash scripts/pretrain_VLT5_large_multi.sh 8 --output /mnt/root/vlt5/pretrain/cc_train_large_only --losses 'lm,ground_caption,refer,itm' --train cc_train --valid cc_valid --lr 2e-4
+
 
 
 - name: cc_only_train_vqa

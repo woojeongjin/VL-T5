@@ -168,15 +168,14 @@ class FROZENPretraining(FROZEN):
 
         vis_feats = self.resnet(tensor_img)
 
-        vis_attention_mask = None
-        if 'vis_attention_mask' in batch:
-            vis_attention_mask = batch['vis_attention_mask'].to(device)
+        # vis_attention_mask = None
+        # if 'vis_attention_mask' in batch:
+        #     vis_attention_mask = batch['vis_attention_mask'].to(device)
 
         output = self.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
             vis_inputs=vis_feats,
-            vis_attention_mask=vis_attention_mask,
         )
 
         generated_sents = self.tokenizer.batch_decode(output, skip_special_tokens=True)

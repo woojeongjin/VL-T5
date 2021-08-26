@@ -149,8 +149,8 @@ class JointEncoder(T5Stack):
 
         V_L = vis_embeds.size(1)
 
-        inputs_embeds = torch.cat([inputs_embeds, vis_embeds], dim=1)
-        # inputs_embeds = torch.cat([vis_embeds, inputs_embeds], dim=1)
+        # inputs_embeds = torch.cat([inputs_embeds, vis_embeds], dim=1)
+        inputs_embeds = torch.cat([vis_embeds, inputs_embeds], dim=1)
 
         if attention_mask is None:
             attention_mask = input_ids.ne(self.config.pad_token_id).to(dtype=inputs_embeds.dtype, device=inputs_embeds.device)
@@ -158,8 +158,8 @@ class JointEncoder(T5Stack):
         if vis_attention_mask is None:
             vis_attention_mask = attention_mask.new_ones(B, V_L)
 
-        attention_mask = torch.cat([attention_mask, vis_attention_mask], dim=1)
-        # attention_mask = torch.cat([vis_attention_mask, attention_mask], dim=1)
+        # attention_mask = torch.cat([attention_mask, vis_attention_mask], dim=1)
+        attention_mask = torch.cat([vis_attention_mask, attention_mask], dim=1)
 
         # ourselves in which case we just need to make it broadcastable to all heads.
         extended_attention_mask = self.get_extended_attention_mask(
@@ -191,16 +191,16 @@ class JointEncoder(T5Stack):
             k_len = seq_length
 
             # [1, n_heads, Q_len, K_len]
-            text_position_bias = self.block[0].layer[0].SelfAttention.compute_bias(
-                L, L)
-            num_heads = text_position_bias.size(1)
-            position_bias = text_position_bias.new_zeros(
-                1, num_heads, seq_length, seq_length)
-            position_bias[:, :, :L, :L] = text_position_bias
+            # text_position_bias = self.block[0].layer[0].SelfAttention.compute_bias(
+            #     L, L)
+            # num_heads = text_position_bias.size(1)
+            # position_bias = text_position_bias.new_zeros(
+            #     1, num_heads, seq_length, seq_length)
+            # position_bias[:, :, :L, :L] = text_position_bias
             
             # position including images
-            # position_bias = self.block[0].layer[0].SelfAttention.compute_bias(
-            #     L + V_L, L + V_L)
+            position_bias = self.block[0].layer[0].SelfAttention.compute_bias(
+                L + V_L, L + V_L)
 
             # print('position_bias size', position_bias.size())
             # print('attention_mask size', attention_mask.size())

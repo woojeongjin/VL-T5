@@ -8,14 +8,14 @@ python src/pretrain_frozen.py \
         --distributed --multiGPU --fp16 \
         --train mscoco_resplit_train,vgnococo \
         --valid mscoco_resplit_val \
-        --batch_size 160 \
+        --batch_size 100 \
         --optim adamw \
         --warmup_ratio 0.05 \
         --lr 3e-4 \
         --num_workers 1 \
         --clip_grad_norm 1.0 \
         --losses 'lm' \
-        --backbone 'gpt2' \
+        --backbone 'gpt2-large' \
         ${@:2} \
         --epoch 30 \
         --caption_only \

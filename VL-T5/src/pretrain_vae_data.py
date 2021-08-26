@@ -231,16 +231,16 @@ class PretrainDataset(Dataset):
 
         if is_train:
             self.img_transform = transforms.Compose([
-                transforms.Resize(112, interpolation=1),
-                transforms.CenterCrop(112),
+                transforms.Resize(120, interpolation=1),
+                transforms.CenterCrop(120),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 map_pixels
             ])
         else:
             self.img_transform = transforms.Compose([
-                transforms.Resize(112, interpolation=1),
-                transforms.CenterCrop(112),
+                transforms.Resize(120, interpolation=1),
+                transforms.CenterCrop(120),
                 transforms.ToTensor(),
                 map_pixels
             ])

@@ -147,6 +147,10 @@ class Trainer(TrainerBase):
                 if 'visual_embedding' not in name:
                     param.requires_grad = False
 
+        for name, param in self.model.named_parameters():
+            if 'vae' in name:
+                param.requires_grad = False
+
         global_step = 0
         for step, epoch in enumerate(range(self.args.epochs)):
             if self.start_epoch is not None:

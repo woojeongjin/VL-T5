@@ -273,8 +273,11 @@ class PretrainDataset(Dataset):
         self.n_boxes = args.n_boxes
 
         if 'gpt2' in self.args.backbone:
+            # self.tokenizer = GPT2TokenizerFast.from_pretrained(
+            #     args.backbone, do_lower_case=args.do_lower_case, pad_token='<PAD>')
             self.tokenizer = GPT2TokenizerFast.from_pretrained(
                 args.backbone, do_lower_case=args.do_lower_case)
+            # self.tokenizer.padding_side = 'left'
 
 
     def __len__(self):
@@ -340,11 +343,19 @@ class PretrainDataset(Dataset):
 
             eos_token_id = self.tokenizer.eos_token_id
 
+            # inputs_ids = self.tokenizer.encode(source_text, truncation=True, max_length = self.args.max_text_length-1)
+
+
+            # input_ids = inputs['input_ids'] +[eos_token_id]
+            # attention_mask =inputs['attention_mask'] + [1] 
+            # start_idx = self.args.max_text_length - sum(attention_mask)
+            # attention_mask = attention_mask + [1] * self.args.vis_size
+
             input_ids = self.tokenizer.encode(
                 source_text, truncation=True, max_length=self.args.max_text_length-1) +[eos_token_id]
                 
 
-            padded_ids = input_ids  + [0] * (self.args.max_text_length - len(input_ids))
+            padded_ids = input_ids  + [eos_token_id] * (self.args.max_text_length - len(input_ids))
             attention_mask = [0] * len(padded_ids)
             attention_mask[:len(input_ids)] = [1] * len(input_ids)
             attention_mask = [1] * self.args.vis_size + attention_mask
@@ -409,8 +420,8 @@ class PretrainDataset(Dataset):
 
         feat_dim = batch[0]['vis_feats'].shape[-1]
 
-        input_ids = torch.ones(B, S_W_L, dtype=torch.long) * 0
-        target_ids = torch.ones(B, T_W_L, dtype=torch.long) * 0
+        input_ids = torch.ones(B, S_W_L, dtype=torch.long) * self.tokenizer.eos_token_id
+        target_ids = torch.ones(B, T_W_L, dtype=torch.long) * self.tokenizer.eos_token_id
         attention_mask = torch.ones(B, A_W_L, dtype=torch.long) * 0
 
         # boxes = torch.zeros(B, V_L, 4, dtype=torch.float)
@@ -454,8 +465,10 @@ class PretrainDataset(Dataset):
         # vis_feats = self.vae.get_codebook_indices(vis_feats)
 
         assert 'gpt2' in args.backbone
-        word_mask = target_ids != self.tokenizer.pad_token_id
+        # word_mask = target_ids != self.tokenizer.pad_token_id
+        word_mask = attention_mask[:,2:] != 0
         target_ids[~word_mask] = -100
+
         batch_entry['task'] = tasks
 
         batch_entry['source_text'] = source_text

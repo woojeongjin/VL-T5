@@ -603,13 +603,17 @@ class FROZEN(GPT2LMHeadModel):
 
         # remove vis embed
         if no_past:
-            lm_logits = lm_logits[:, 2:, :]
+            new_lm_logits = lm_logits[:, 2:, :]
+        else:
+            new_lm_logits = lm_logits
 
         loss = None
         if labels is not None:
+            # print('label', labels.shape)
             # Shift so that tokens < n predict n
-            shift_logits = lm_logits[..., :-1, :].contiguous()
+            shift_logits = new_lm_logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
+            
             # if no_past:
             #     shift_logits = lm_logits[..., :-1, :].contiguous()
             #     shift_labels = labels[..., :].contiguous()
@@ -618,6 +622,7 @@ class FROZEN(GPT2LMHeadModel):
             #     shift_labels = labels[..., 1:].contiguous()
 
             # Flatten the tokens
+            
             loss_fct = CrossEntropyLoss(ignore_index=-100, reduction='none')
             loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
 
